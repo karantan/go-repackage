@@ -7,13 +7,13 @@
 openapi: 3.0.0
 info:
   title: TAR.ZST to ZIP Repackaging Service
-  description: An AWS Lambda service that repackages a .tar.zst file from a provided URL into a .zip file.
+  description: An AWS Lambda service that repackages a .tar.zst file from a provided URL into a .zip file and returns the URL of the new .zip file.
   version: 1.0.0
 paths:
   /repackage:
     post:
       summary: Repackage .tar.zst file to .zip
-      description: This endpoint accepts a URL pointing to a .tar.zst file, downloads it, repackages it into a .zip file, and returns the .zip file.
+      description: This endpoint accepts a URL pointing to a .tar.zst file, downloads it, repackages it into a .zip file, and returns the URL of the .zip file.
       requestBody:
         required: true
         content:
@@ -31,10 +31,14 @@ paths:
         '200':
           description: Successfully repackaged the file.
           content:
-            application/zip:
+            application/json:
               schema:
-                type: string
-                format: binary
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+                    example: "https://example.com/file.zip"
         '400':
           description: Bad Request
           content:
@@ -66,6 +70,13 @@ components:
           example: "https://example.com/file.tar.zst"
       required:
         - url
+    RepackageResponse:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          example: "https://example.com/file.zip"
     ErrorResponse:
       type: object
       properties:
