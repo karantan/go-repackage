@@ -12,13 +12,17 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"repackage/logger"
 	"repackage/storage"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/klauspost/compress/zstd"
 )
+
+var log = logger.New("main", false)
 
 // Request is the struct for the incoming request payload
 type Request struct {
@@ -54,6 +58,7 @@ func repackageFile(reader io.ReadCloser) ([]byte, error) {
 
 	zstdReader, err := zstd.NewReader(reader)
 	if err != nil {
+		log.Errorf("Failed to create new zstd reader: %v", err)
 		return nil, err
 	}
 	defer zstdReader.Close()
@@ -68,6 +73,7 @@ func repackageFile(reader io.ReadCloser) ([]byte, error) {
 			break
 		}
 		if err != nil {
+			log.Errorf("Failed to advance to the next entry in the tar archive: %v", err)
 			return nil, err
 		}
 
@@ -77,15 +83,18 @@ func repackageFile(reader io.ReadCloser) ([]byte, error) {
 
 		fileInZip, err := zipWriter.Create(header.Name)
 		if err != nil {
+			log.Errorf("Failed to create new zip writer: %v", err)
 			return nil, err
 		}
 
 		if _, err := io.Copy(fileInZip, tarReader); err != nil {
+			log.Errorf("Failed to copy tar content to zip archive: %v", err)
 			return nil, err
 		}
 	}
 
 	if err := zipWriter.Close(); err != nil {
+		log.Errorf("Failed to close zip writer: %v", err)
 		return nil, err
 	}
 
@@ -97,29 +106,34 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (Respon
 	var req Request
 	err := json.Unmarshal([]byte(request.Body), &req)
 	if err != nil {
+		log.Errorf("Invalid request payload: %v", err)
 		return Response{StatusCode: 400, Body: "Invalid request payload"}, nil
 	}
 
 	reader, originalFilename, err := downloadFile(req.URL)
 	if err != nil {
+		log.Errorf("Failed to download file: %v", err)
 		return Response{StatusCode: 500, Body: "Failed to download file"}, nil
 	}
 
 	zipBytes, err := repackageFile(reader)
 	if err != nil {
+		log.Errorf("Failed to repackage file: %v", err)
 		return Response{StatusCode: 500, Body: "Failed to repackage file"}, nil
 	}
 
-	zipFilename := originalFilename + ".zip"
-	objectKey := "converted/" + zipFilename
+	timestamp := time.Now().Format("2006-01-02 15:04")
+	zipFilename := fmt.Sprintf("%s-%s.zip", originalFilename, timestamp)
 
 	bucket := storage.NewB2Client(os.Getenv("BUCKET_NAME"))
-	if err := storage.Write(bucket.S3Client, bucket.BucketName, objectKey, bytes.NewReader(zipBytes)); err != nil {
-		return Response{StatusCode: 500, Body: "Failed to repackage file"}, nil
+	if err := storage.Write(bucket.S3Client, bucket.BucketName, zipFilename, bytes.NewReader(zipBytes)); err != nil {
+		log.Errorf("Failed to upload file: %v", err)
+		return Response{StatusCode: 500, Body: "Failed to upload file"}, nil
 	}
 
-	presignedReq, err := storage.GetPresignedObject(bucket.Presigner, bucket.BucketName, objectKey, int64(3600))
+	presignedReq, err := storage.GetPresignedObject(bucket.Presigner, bucket.BucketName, zipFilename, int64(3600))
 	if err != nil {
+		log.Errorf("Failed to generate presigned URL: %v", err)
 		return Response{StatusCode: 500, Body: "Failed to generate presigned URL"}, nil
 	}
 
