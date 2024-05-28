@@ -1,0 +1,74 @@
+---
+#
+# OpenAPI3 specs and docs:
+# - https://spec.openapis.org/oas/v3.1.0
+# - https://swagger.io/docs/specification
+#
+openapi: 3.0.0
+info:
+  title: TAR.ZST to ZIP Repackaging Service
+  description: An AWS Lambda service that repackages a .tar.zst file from a provided URL into a .zip file.
+  version: 1.0.0
+paths:
+  /repackage:
+    post:
+      summary: Repackage .tar.zst file to .zip
+      description: This endpoint accepts a URL pointing to a .tar.zst file, downloads it, repackages it into a .zip file, and returns the .zip file.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  example: "https://example.com/file.tar.zst"
+              required:
+                - url
+      responses:
+        '200':
+          description: Successfully repackaged the file.
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Invalid request payload"
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "An error occurred while processing the file"
+components:
+  schemas:
+    RepackageRequest:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          example: "https://example.com/file.tar.zst"
+      required:
+        - url
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "An error occurred"
