@@ -35,6 +35,11 @@ functions:
           path: /repackage
           method: post
     environment:
+      # Add these in AWS CP > Systems Manager > Parameter Store
+      # https://www.serverless.com/framework/docs/providers/aws/guide/variables#reference-variables-using-the-ssm-parameter-store
+      B2_KEY_ID: ${ssm:/B2_KEY_ID}
+      B2_APPLICATION_KEY: ${ssm:/B2_APPLICATION_KEY}
+      BUCKET_NAME: ${ssm:/B2_BUCKET_NAME}
       # AWS Lambda provides a /tmp directory with 512 MB of storage for your
       # function execution. This space is ephemeral and is deleted once the
       # function execution ends.

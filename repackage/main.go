@@ -5,12 +5,14 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
+	"repackage/storage"
 	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -109,18 +111,21 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (Respon
 	}
 
 	zipFilename := originalFilename + ".zip"
-	respBase64 := base64.StdEncoding.EncodeToString(zipBytes)
+	objectKey := "converted/" + zipFilename
 
-	headers := map[string]string{
-		"Content-Type":        "application/zip",
-		"Content-Disposition": "attachment; filename=\"" + zipFilename + "\"",
+	bucket := storage.NewB2Client(os.Getenv("BUCKET_NAME"))
+	if err := storage.Write(bucket.S3Client, bucket.BucketName, objectKey, bytes.NewReader(zipBytes)); err != nil {
+		return Response{StatusCode: 500, Body: "Failed to repackage file"}, nil
+	}
+
+	presignedReq, err := storage.GetPresignedObject(bucket.Presigner, bucket.BucketName, objectKey, int64(3600))
+	if err != nil {
+		return Response{StatusCode: 500, Body: "Failed to generate presigned URL"}, nil
 	}
 
 	return Response{
-		StatusCode:      200,
-		IsBase64Encoded: true,
-		Body:            respBase64,
-		Headers:         headers,
+		StatusCode: 200,
+		Body:       fmt.Sprintf(`{"url":"%s"}`, presignedReq.URL),
 	}, nil
 }
 
